@@ -1,40 +1,44 @@
 import express from "express";
-import Database from "better-sqlite3";
-import crypto from "crypto";
+import fs from "fs";
 
 const app = express();
 app.use(express.json());
-const db = new Database("keys.db");
 
-// Create table if not exists
-db.exec(`
-CREATE TABLE IF NOT EXISTS keys (
-  key TEXT PRIMARY KEY,
-  used INTEGER DEFAULT 0,
-  created_at INTEGER,
-  expires_at INTEGER
-);
-`);
+let keys = [];
+const file = "keys.json";
+
+// Load keys if file exists
+if (fs.existsSync(file)) {
+  keys = JSON.parse(fs.readFileSync(file));
+}
+
+// Save function
+function saveKeys() {
+  fs.writeFileSync(file, JSON.stringify(keys, null, 2));
+}
 
 // Generate key
 app.post("/generate-key", (req, res) => {
-  const key = crypto.randomBytes(12).toString("hex");
+  const key = Math.random().toString(36).substring(2, 14) +
+              Math.random().toString(36).substring(2, 14);
   const now = Date.now();
-  const expires = now + 60 * 60 * 1000; // 1 hour
-  db.prepare("INSERT INTO keys VALUES (?,0,?,?)").run(key, now, expires);
+  const expires = now + 60 * 60 * 1000;
+  keys.push({ key, used: false, created_at: now, expires_at: expires });
+  saveKeys();
   res.json({ key, expires });
 });
 
-// Validate and mark used
+// Validate key
 app.post("/mark-used", (req, res) => {
   const { key } = req.body;
-  const row = db.prepare("SELECT * FROM keys WHERE key=?").get(key);
-  if (!row) return res.status(400).json({ ok: false, msg: "invalid" });
-  if (row.used) return res.status(400).json({ ok: false, msg: "used" });
-  if (row.expires_at < Date.now()) return res.status(400).json({ ok: false, msg: "expired" });
+  const row = keys.find(k => k.key === key);
+  if (!row) return res.status(400).json({ ok:false, msg:"invalid" });
+  if (row.used) return res.status(400).json({ ok:false, msg:"used" });
+  if (row.expires_at < Date.now()) return res.status(400).json({ ok:false, msg:"expired" });
 
-  db.prepare("UPDATE keys SET used=1 WHERE key=?").run(key);
-  res.json({ ok: true });
+  row.used = true;
+  saveKeys();
+  res.json({ ok:true });
 });
 
 app.listen(3000, () => console.log("✅ Server running on port 3000"));
