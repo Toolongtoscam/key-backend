@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "main": "server.js",
   "type": "module",
+  "engines": {
+    "node": ">=18.x"
+  },
   "dependencies": {
     "express": "^4.19.2",
     "better-sqlite3": "^9.4.1"
